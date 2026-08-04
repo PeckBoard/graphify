@@ -111,9 +111,14 @@ so, so the agent doesn't ask this graph for prose it never ingested.
 
 ## Visualizer
 
-The manifest contributes a global **sidebar** entry, `Graphify`, served at
-`/plugin-api/v1/graphify` and framed in a sandboxed iframe. It reads its data
-from the authenticated `/api/plugin-ui/graphify/*` routes through the standard
+The manifest contributes the same **Graphify** page three ways — a project menu
+entry, a session menu entry, and a button on each row of the **Folders** page —
+served at `/plugin-api/v1/graphify` and framed in a sandboxed iframe. Never a
+global sidebar entry: a global page carries no scope header, so core resolves no
+folder for it and every route below refuses. All three surfaces read the same
+state — the switches are keyed by folder id — so a folder enabled from a project
+reads back enabled on the Folders page. It reads its data from the
+authenticated `/api/plugin-ui/graphify/*` routes through the standard
 parent-proxied fetch bridge:
 
 | Route | Returns |

@@ -43,8 +43,7 @@ function parseBody(body: string): any {
     throw new Error("invalid request body: " + errMsg(e));
   }
 }
-
-/// Serve the visualizer page (the sidebar item opens this).
+/// Serve the visualizer page (a project, session, or Folders-page item opens this).
 export function serveHttp(payload: any): string {
   if (up(payload?.method) === "GET" && str(payload?.path) === PAGE_PATH) {
     return htmlResponse(200, PAGE);
@@ -106,7 +105,8 @@ export function serveAuthed(payload: any): string {
 function setEnabled(folderId: string | null, body: any): any {
   if (folderId === null) {
     throw new Error(
-      "this page could not be tied to a folder — open Graphify from a project or session",
+      "this page could not be tied to a folder — open Graphify from the Folders page, " +
+        "or from a project or session inside the folder",
     );
   }
   const enabled = body?.enabled === true;

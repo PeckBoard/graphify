@@ -9,7 +9,7 @@ const DESCRIPTION =
   "system prompt telling the agent the graph exists and when to prefer it over " +
   "reading files, and ships a per-repo visualizer. Off until switched on: each " +
   "folder, and each repo inside it, is enabled from the Graphify page.";
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 const REPOSITORY = "https://github.com/PeckBoard/graphify";
 
 // Inline SVG (lucide "waypoints") for the sidebar entry; rendered sandboxed.
@@ -61,18 +61,26 @@ export function manifestJson(): string {
 
     // Deliberately NOT a global `sidebar_items` entry. A global plugin page is
     // rendered with `scope={{}}` (peckboard/web/src/App.tsx), so its authed
-    // fetches carry no `x-peckboard-project-id` / `x-peckboard-session-id`
-    // header, `InvocationContext.folder_id` is None, and every scoped host
-    // function fails with "caller has no folder scope" — which is every route
-    // this page has. Project- and session-scoped items DO carry that id, so the
-    // exec + read_file calls resolve to that folder's repos. Scoping the
-    // visualizer to a project is also simply the right model: the repos it
-    // lists are the ones under that project's folder.
+    // fetches carry no `x-peckboard-*` scope header, `InvocationContext.folder_id`
+    // is None, and every scoped host function fails with "caller has no folder
+    // scope" — which is every route this page has. The three surfaces below all
+    // DO carry a scope header, so the exec + read_file calls resolve to a real
+    // folder's repos.
+    //
+    // `folder_items` is the most direct of the three: the Folders page names the
+    // folder outright (`x-peckboard-folder-id`), with no project or session to
+    // borrow scope from. All three open the same page against the same state —
+    // the switches are keyed by folder id in the plugin store (see scope.ts) —
+    // so a folder enabled from a project view reads back enabled here.
     project_items: [
       { id: "graphify", label: "Graphify", icon: ICON, path: "/plugin-api/v1/graphify" },
     ],
 
     session_items: [
+      { id: "graphify", label: "Graphify", icon: ICON, path: "/plugin-api/v1/graphify" },
+    ],
+
+    folder_items: [
       { id: "graphify", label: "Graphify", icon: ICON, path: "/plugin-api/v1/graphify" },
     ],
 

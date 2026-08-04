@@ -109,7 +109,7 @@ export function gate(folderId: string | null, repo: string): Refusal | null {
       error: "graphify could not tell which folder this call belongs to",
       next_step:
         "run this from a session inside the folder you want graphed, then enable graphify " +
-        "for it on the Graphify page",
+        "for it on the Graphify page (Folders → the folder's Graphify button)",
     };
   }
   if (!folderEnabled(folderId)) {
@@ -118,8 +118,8 @@ export function gate(folderId: string | null, repo: string): Refusal | null {
       repo: rel,
       error: "graphify is switched off for this folder",
       next_step:
-        "open the Graphify page (sidebar → Graphify) and turn on 'Graphify in this folder', " +
-        `then switch on the '${rel}' repo`,
+        "open the Graphify page (Folders → the folder's Graphify button) and turn on " +
+        `'Graphify in this folder', then switch on the '${rel}' repo`,
     };
   }
   if (!repoEnabled(folderId, rel)) {
@@ -127,7 +127,9 @@ export function gate(folderId: string | null, repo: string): Refusal | null {
       enabled: false,
       repo: rel,
       error: `graphify is switched off for the '${rel}' repo`,
-      next_step: `open the Graphify page (sidebar → Graphify) and switch on the '${rel}' repo`,
+      next_step:
+        "open the Graphify page (Folders → the folder's Graphify button) and switch on " +
+        `the '${rel}' repo`,
     };
   }
   return null;

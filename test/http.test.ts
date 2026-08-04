@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { docStore, driverStdout, setHandlers } from "./fakeHost";
 import { queryParam, serveAuthed } from "../src/http";
+import { manifestJson } from "../src/manifest";
 
 const API = "/api/plugin-ui/graphify";
 const FOLDER = "folder-1";
@@ -34,6 +35,30 @@ function stub(seed: Record<string, unknown> = {}) {
   });
   return store;
 }
+
+describe("the manifest's page surfaces", () => {
+  const m = JSON.parse(manifestJson());
+
+  it("offers the page from a project, a session, AND a Folders page row", () => {
+    for (const key of ["project_items", "session_items", "folder_items"]) {
+      expect(m[key], key).toHaveLength(1);
+      expect(m[key][0].id).toBe("graphify");
+      expect(m[key][0].label).toBe("Graphify");
+      // One page, three ways in — the switches are keyed by folder id, so all
+      // three read back the same state.
+      expect(m[key][0].path).toBe("/plugin-api/v1/graphify");
+      expect(m[key][0].icon).toMatch(/^<svg /);
+    }
+  });
+
+  it("declares no global sidebar entry, which would carry no folder scope", () => {
+    expect(m.sidebar_items ?? []).toEqual([]);
+  });
+
+  it("holds contribute_sidebar, which core requires for those entries", () => {
+    expect(m.permissions).toContain("contribute_sidebar");
+  });
+});
 
 describe("the enable route", () => {
   it("reports both switches off before anything is flipped", () => {
