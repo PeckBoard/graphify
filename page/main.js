@@ -142,6 +142,11 @@ const state = {
   loadError: "",
   status: null, // {graphify_installed, python_bin, version}
   repos: [],
+  // Graphify is off until switched on: the folder carries one switch and each
+  // repo inside it carries its own. Both default off.
+  folderEnabled: false,
+  folderKnown: true, // false when the page can't be tied to a folder
+  switching: false, // a /enable call is in flight
   building: new Map(), // repo path -> {started}
   install: { phase: "idle", result: null, error: "" }, // idle|running|done
   repo: null, // repo card the graph view was opened from
@@ -183,13 +188,52 @@ async function loadIndex() {
   try {
     const [status, repos] = await Promise.all([getJSON(P + "/status"), getJSON(P + "/repos")]);
     state.status = status;
-    state.repos = repos.repos || [];
+    applyRepos(repos);
     state.loadError = "";
   } catch (e) {
     state.loadError = String((e && e.message) || e);
   }
   state.loading = false;
   if (state.view === "index") renderIndex();
+}
+
+/// Fold a /repos (or /enable) response into state. Both carry the same shape,
+/// so flipping a switch refreshes the list without a second round trip.
+function applyRepos(payload) {
+  state.repos = (payload && payload.repos) || [];
+  state.folderKnown = !payload || payload.folder_known !== false;
+  state.folderEnabled = !!(payload && payload.folder_enabled);
+}
+
+/// Flip a switch and re-render from the server's answer, so what the page shows
+/// is what the tools will read.
+async function setEnabled(scope, repo, enabled) {
+  state.switching = true;
+  renderIndex();
+  try {
+    applyRepos(await postJSON(P + "/enable", { scope, repo, enabled }));
+    state.loadError = "";
+  } catch (e) {
+    state.loadError = String((e && e.message) || e);
+  }
+  state.switching = false;
+  renderIndex();
+}
+
+/// A labelled toggle. `onChange` gets the new checked state.
+function switchEl(label, checked, disabled, onChange) {
+  const wrap = el("label", "switch");
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.checked = !!checked;
+  input.disabled = !!disabled;
+  input.addEventListener("click", (e) => e.stopPropagation());
+  input.addEventListener("change", () => onChange(input.checked));
+  wrap.appendChild(input);
+  wrap.appendChild(el("span", "track"));
+  if (label) wrap.appendChild(el("span", "", label));
+  wrap.addEventListener("click", (e) => e.stopPropagation());
+  return wrap;
 }
 
 // ── repo index ───────────────────────────────────────────────────────────────
@@ -213,6 +257,16 @@ function renderIndex() {
   }
   bar.appendChild(sub);
   bar.appendChild(el("div", "spacer"));
+  // The master switch. Everything else on this page is downstream of it: with
+  // the folder off, graphify does nothing here and every tool refuses.
+  bar.appendChild(
+    switchEl(
+      "Graphify in this folder",
+      state.folderEnabled,
+      state.switching || !state.folderKnown,
+      (on) => setEnabled("folder", null, on),
+    ),
+  );
   const refresh = el("button", "", "Refresh");
   refresh.addEventListener("click", () => {
     state.loading = true;
@@ -237,6 +291,30 @@ function renderIndex() {
     const g = el("div", "grow");
     g.appendChild(el("b", "", "Couldn't load Graphify data. "));
     g.appendChild(el("span", "note", state.loadError));
+    b.appendChild(g);
+    wrap.appendChild(b);
+  }
+  if (!state.folderKnown) {
+    const b = el("div", "banner warn");
+    const g = el("div", "grow");
+    g.appendChild(el("b", "", "This page isn't tied to a folder. "));
+    g.appendChild(
+      el("span", "note", "Open Graphify from a project or session to switch it on there."),
+    );
+    b.appendChild(g);
+    wrap.appendChild(b);
+  } else if (!state.folderEnabled) {
+    const b = el("div", "banner");
+    const g = el("div", "grow");
+    g.appendChild(el("b", "", "Graphify is off for this folder. "));
+    g.appendChild(
+      el(
+        "span",
+        "note",
+        "Nothing is built and the graphify tools refuse. Turn it on above, then " +
+          "switch on the repos you want mapped.",
+      ),
+    );
     b.appendChild(g);
     wrap.appendChild(b);
   }
@@ -369,8 +447,11 @@ function selectCode(btn) {
 
 function repoCard(repo, theme) {
   const building = state.building.has(repo.path);
-  const canOpen = !!repo.has_graph && !building;
-  const card = el("article", "card" + (canOpen ? " open" : ""));
+  // A repo that is switched off (or whose folder is) is inert: no graph view,
+  // no build. Its own switch is the one control that still works.
+  const live = state.folderEnabled && repo.enabled;
+  const canOpen = live && !!repo.has_graph && !building;
+  const card = el("article", "card" + (canOpen ? " open" : "") + (live ? "" : " off"));
   if (canOpen) {
     card.tabIndex = 0;
     card.setAttribute("role", "button");
@@ -387,6 +468,16 @@ function repoCard(repo, theme) {
 
   const head = el("div", "card-head");
   head.appendChild(el("h2", "", repo.name || repo.path));
+  const toggle = switchEl(
+    "",
+    !!repo.enabled,
+    state.switching || !state.folderEnabled,
+    (on) => setEnabled("repo", repo.path, on),
+  );
+  toggle.title = state.folderEnabled
+    ? "Let graphify map this repo"
+    : "Turn Graphify on for this folder first";
+  head.appendChild(toggle);
   const btn = el("button");
   if (building) {
     btn.disabled = true;
@@ -397,8 +488,7 @@ function repoCard(repo, theme) {
     btn.appendChild(t);
   } else {
     btn.textContent = repo.has_graph ? "Rebuild" : "Build";
-    btn.disabled = !!(state.status && !state.status.graphify_installed);
-    btn.setAttribute("aria-label", btn.textContent + " graph for " + (repo.name || repo.path));
+    btn.disabled = !live || !!(state.status && !state.status.graphify_installed);
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       startBuild(repo);
@@ -408,6 +498,18 @@ function repoCard(repo, theme) {
   card.appendChild(head);
   card.appendChild(el("div", "path", repo.path));
 
+  if (!live) {
+    card.appendChild(
+      el(
+        "div",
+        "nograph",
+        state.folderEnabled
+          ? "Switched off — graphify leaves this repo alone and the tools refuse it."
+          : "Graphify is off for this folder.",
+      ),
+    );
+    return card;
+  }
   if (building) {
     card.setAttribute("aria-busy", "true");
     card.appendChild(

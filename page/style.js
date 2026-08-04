@@ -94,6 +94,25 @@ input:focus { outline: 2px solid var(--ring); outline-offset: 1px; border-color:
   flex-basis: 100%; margin: 0;
 }
 
+/* Graphify is off until switched on, per folder and per repo. A card that is
+   off stays readable — it is the thing you are about to turn on. */
+.switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; }
+.switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.switch .track {
+  width: 32px; height: 18px; border-radius: 9px; flex: none; position: relative;
+  background: var(--border-strong); transition: background 150ms ease;
+}
+.switch .track::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px;
+  border-radius: 50%; background: #fff; transition: transform 150ms ease;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.25);
+}
+.switch input:checked + .track { background: var(--accent); }
+.switch input:checked + .track::after { transform: translateX(14px); }
+.switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+.switch input:disabled + .track { opacity: 0.5; cursor: not-allowed; }
+.card.off { opacity: 0.72; }
+.card.off .path, .card.off .nograph { color: var(--text3); }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
 .card {
   background: var(--surface); border: 1px solid var(--border); border-radius: 10px;

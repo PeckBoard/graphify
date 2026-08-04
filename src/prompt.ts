@@ -5,6 +5,7 @@
 // when the text actually changed.
 
 import { getSetting, readFile, setSessionSystemPrompt, storeGet, storePut } from "./host";
+import { REPOS, callerFolder, folderEnabled, repoEnabled, repoKey } from "./scope";
 import { parseGraphJson, summarize } from "./graph";
 
 /// Document-store collection: session id → the hash of the block we last wrote.
@@ -56,7 +57,7 @@ export function composePrompt(stats: GraphStats | null, hasGraph: boolean): stri
       "- `graphify_explain(label)` — what X is, where it is defined, every direct neighbour with",
       "  the relation and confidence on each edge, and the cluster it belongs to. The fastest way",
       "  to orient in unfamiliar code before opening a single file.",
-      "- `graphify_path(source, target)` — how A actually reaches B, hop by hop.",
+      "- `graphify_path(source, target)` — how A actually reaches B, hop by hop, with a diagram.",
       "- `graphify_build()` — refresh after substantial code changes.",
       "",
       "Read files when you need exact text, line numbers, comments, or anything an AST does not",
@@ -95,7 +96,16 @@ export function syncSessionPrompt(payload: any): void {
   const mode = promptMode();
   if (mode === "off") return;
 
-  const graph = readFolderGraph();
+  // Switched off for this folder (or for the folder root itself) means the
+  // session is told nothing: the tools would refuse anyway, and a prompt
+  // advertising tools that refuse is worse than no prompt.
+  const folderId = callerFolder();
+  if (!folderEnabled(folderId) || !repoEnabled(folderId, ".")) {
+    clearPrompt(sessionId);
+    return;
+  }
+
+  const graph = readFolderGraph(folderId);
   if (mode === "when_graph_exists" && !graph.exists) {
     // The graph was deleted (or never built) — take our block back off, so the
     // session stops being told about tools that have nothing to answer from.
@@ -128,7 +138,10 @@ function clearPrompt(sessionId: string): void {
 /// common path never parses the JSON; parsing is the fallback for a graph built
 /// outside the plugin, and a graph too large for the 1 MiB read cap still
 /// counts as present, just without numbers.
-export function readFolderGraph(): { exists: boolean; stats: GraphStats | null } {
+export function readFolderGraph(folderId: string | null): {
+  exists: boolean;
+  stats: GraphStats | null;
+} {
   let text = "";
   try {
     text = readFile(FOLDER_GRAPH);
@@ -137,7 +150,7 @@ export function readFolderGraph(): { exists: boolean; stats: GraphStats | null }
   }
   if (text.trim() === "") return { exists: false, stats: null };
 
-  const record = storeGet("repos", ".");
+  const record = folderId === null ? null : storeGet(REPOS, repoKey(folderId, "."));
   if (record && typeof record.nodes === "number") {
     return {
       exists: true,

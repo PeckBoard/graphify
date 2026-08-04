@@ -7,8 +7,9 @@ const DESCRIPTION =
   "with graphify's deterministic tree-sitter pass (no LLM), exposes it to the " +
   "agent as three MCP tools — build, shortest path, explain — sets a session " +
   "system prompt telling the agent the graph exists and when to prefer it over " +
-  "reading files, and ships a per-repo visualizer.";
-const VERSION = "0.1.0";
+  "reading files, and ships a per-repo visualizer. Off until switched on: each " +
+  "folder, and each repo inside it, is enabled from the Graphify page.";
+const VERSION = "0.2.0";
 const REPOSITORY = "https://github.com/PeckBoard/graphify";
 
 // Inline SVG (lucide "waypoints") for the sidebar entry; rendered sandboxed.
@@ -23,7 +24,8 @@ const ICON =
 // (`.` = the folder itself), because core pins exec's cwd to the folder root.
 const REPO_ARG =
   "Repo to act on, as a path relative to the folder root ('.' for the folder " +
-  "itself). Defaults to '.'. Must stay inside the folder.";
+  "itself). Defaults to '.'. Must stay inside the folder, and must be switched " +
+  "on for graphify on the Graphify page.";
 
 export function manifestJson(): string {
   const manifest = {
@@ -81,6 +83,7 @@ export function manifestJson(): string {
       "GET /api/plugin-ui/graphify/graph",
       "GET /api/plugin-ui/graphify/status",
       "POST /api/plugin-ui/graphify/build",
+      "POST /api/plugin-ui/graphify/enable",
       "POST /api/plugin-ui/graphify/install",
     ],
 
@@ -120,6 +123,16 @@ export function manifestJson(): string {
         description:
           "Sets a session system prompt describing the repo's graph and the three tools. " +
           "Appended after the standing Peckboard prompt; takes effect on the session's next run.",
+      },
+      {
+        key: "path_image",
+        title: "Draw the path in chat",
+        type: "boolean",
+        default: true,
+        description:
+          "Return a found graphify_path as a diagram alongside the JSON: the hop chain, each " +
+          "arrow labelled with its relation and confidence. Rendered by the driver with no extra " +
+          "dependencies. Turn it off for text only — the image costs the model vision tokens.",
       },
       {
         key: "build_timeout_secs",
@@ -166,7 +179,8 @@ export function manifestJson(): string {
           "uses, …) and its confidence (EXTRACTED = stated in the source, INFERRED = deduced, " +
           "AMBIGUOUS = uncertain). Use this instead of grepping when the question is 'how does A reach " +
           "B?'. Source and target are matched loosely against node labels and source files, so partial " +
-          "names work. Requires a graph — run graphify_build first.",
+          "names work. Requires a graph — run graphify_build first. A found path also comes back as a " +
+          "diagram of the hop chain, which the chat shows inline.",
         input_schema: {
           type: "object",
           properties: {

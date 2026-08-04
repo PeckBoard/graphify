@@ -86,7 +86,18 @@ export function getSession(sessionId: string): any {
   return result?.session ?? null;
 }
 
-/// Set (or clear, by passing null) a session's custom system prompt. The body
+/// The folder/project/session this call is running in, as core resolved it:
+/// the verified MCP invocation scope, or the scope of the authenticated page
+/// request. `{folder_id: null}` when the plugin is in neither (init, a public
+/// request) — which the switches read as "disabled".
+export function callerScope(): {
+  folder_id: string | null;
+  project_id: string | null;
+  session_id: string | null;
+  authority: boolean;
+} {
+  return hostCall("peckboard_caller_scope", {});
+}
 /// is appended AFTER the standing Peckboard prompt, and takes effect on the
 /// session's next agent run — core reads `session.system_prompt` at every
 /// dispatch (peckboard/src/provider/manager.rs).

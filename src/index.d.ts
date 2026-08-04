@@ -25,6 +25,7 @@ declare module "extism:host" {
     peckboard_store_delete(ptr: I64): I64;
     peckboard_exec(ptr: I64): I64;
     peckboard_read_file(ptr: I64): I64;
+    peckboard_caller_scope(ptr: I64): I64;
     peckboard_get_session(ptr: I64): I64;
     peckboard_set_session_system_prompt(ptr: I64): I64;
   }

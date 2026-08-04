@@ -11,6 +11,7 @@
 // empties any repo living under `.peckboard/worktrees/...`).
 
 import { exec, getSetting, type ExecResult } from "./host";
+import { PATH_IMAGE_PY } from "./pathimage";
 
 /// Interpreter used when the `python_bin` setting is unset. Must stay on core's
 /// EXEC_ALLOWLIST (peckboard/src/plugin/host.rs).
@@ -60,6 +61,8 @@ import json
 import shutil
 import sys
 from pathlib import Path
+
+${PATH_IMAGE_PY}
 
 # The extensions graphify's own code pass walks (graphify/watch.py
 # _CODE_EXTENSIONS). Duplicated rather than imported because the walk below has
@@ -555,8 +558,17 @@ def cmd_path(argv):
             "confidence": str(edata.get("confidence") or ""),
             "source_file": G.nodes[v].get("source_file", ""),
         })
-    return {"ok": True, "repo": rel, "found": True, "hops": hops,
-            "source": _label(G, src_nid), "target": _label(G, tgt_nid), "steps": steps}
+    result = {"ok": True, "repo": rel, "found": True, "hops": hops,
+              "source": _label(G, src_nid), "target": _label(G, tgt_nid), "steps": steps}
+    try:
+        # The diagram is a courtesy: a renderer bug must never cost the caller
+        # the answer it asked for.
+        image = render_path_base64(result)
+        if image:
+            result["image_base64"] = image
+    except Exception:
+        pass
+    return result
 
 
 def cmd_explain(argv):
@@ -779,6 +791,12 @@ function intSetting(key: string, fallback: number, min: number, max: number): nu
 export function pythonBin(): string {
   const v = getSetting("python_bin");
   return typeof v === "string" && v.trim() !== "" ? v.trim() : DEFAULT_PYTHON;
+}
+
+/// Should a found path come back with its diagram? Off means text only — the
+/// image costs the model vision tokens on every call.
+export function pathImageEnabled(): boolean {
+  return boolSetting("path_image", true);
 }
 
 export function buildTimeoutSecs(): number {

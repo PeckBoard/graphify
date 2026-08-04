@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { composePrompt, hashBlock } from "../src/prompt";
+import { docStore, hostCalls, setHandlers } from "./fakeHost";
+import { composePrompt, hashBlock, syncSessionPrompt } from "../src/prompt";
 
 const STATS = { nodes: 412, edges: 903, communities: 11 };
 
@@ -62,5 +63,59 @@ describe("hashBlock", () => {
 
   it("notices a one-character change — the point is skipping the host call", () => {
     expect(hashBlock("graphify")).not.toBe(hashBlock("graphifY"));
+  });
+});
+
+const FOLDER = "folder-1";
+
+/// The store + host functions syncSessionPrompt leans on: the session lookup
+/// that resolves the folder, and a folder-root graph that does exist.
+function stub(seed: Record<string, unknown> = {}) {
+  const store = docStore(seed);
+  setHandlers({
+    ...store.handlers,
+    peckboard_caller_scope: () => ({ folder_id: FOLDER, authority: false }),
+    peckboard_read_file: () => ({ content: '{"nodes":[{"id":"a"}],"links":[]}' }),
+    peckboard_get_plugin_setting: () => ({ value: null }),
+    peckboard_set_session_system_prompt: () => ({}),
+  });
+  return store;
+}
+
+function promptWrites() {
+  return hostCalls.filter((c) => c.name === "peckboard_set_session_system_prompt");
+}
+
+describe("syncSessionPrompt and the switches", () => {
+  it("says nothing to a session whose folder is switched off", () => {
+    stub();
+    syncSessionPrompt({ session_id: "s1" });
+    // Nothing of ours was ever set, so there is nothing to clear either.
+    expect(promptWrites()).toEqual([]);
+  });
+
+  it("says nothing when the folder is on but its root repo is not", () => {
+    stub({ [`folders/${FOLDER}`]: { enabled: true } });
+    syncSessionPrompt({ session_id: "s1" });
+    expect(promptWrites()).toEqual([]);
+  });
+
+  it("describes the graph once both switches are on", () => {
+    stub({
+      [`folders/${FOLDER}`]: { enabled: true },
+      [`repos/${FOLDER}|.`]: { repo: ".", enabled: true },
+    });
+    syncSessionPrompt({ session_id: "s1" });
+    const writes = promptWrites();
+    expect(writes).toHaveLength(1);
+    expect(writes[0].input.system_prompt).toContain("graphify_path");
+  });
+
+  it("takes its block back off when a folder is switched off again", () => {
+    stub({ ["session_prompt/s1"]: { hash: "deadbeef" } });
+    syncSessionPrompt({ session_id: "s1" });
+    const writes = promptWrites();
+    expect(writes).toHaveLength(1);
+    expect(writes[0].input.system_prompt).toBeUndefined(); // cleared
   });
 });

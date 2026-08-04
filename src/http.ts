@@ -12,8 +12,17 @@ import {
   QUERY_TIMEOUT_SECS,
   installGraphify,
   probe,
+  resolveRepoPath,
   runDriver,
 } from "./driver";
+import {
+  folderEnabled,
+  callerFolder,
+  gate,
+  repoEnabled,
+  setFolderEnabled,
+  setRepoEnabled,
+} from "./scope";
 import { parseGraph, summarizeTotals, withDegrees, communityList } from "./graph";
 import { graphifyBuild } from "./tools";
 
@@ -42,13 +51,18 @@ export function serveHttp(payload: any): string {
   }
   return htmlResponse(404, "<!doctype html><title>Not found</title><p>Not found.</p>");
 }
-
 /// Authenticated app-UI endpoints under /api/plugin-ui/graphify/*.
+///
+/// This is the operator's surface, so it is the ONLY place the switches can be
+/// flipped: the agent's tools read them and refuse, they never write them.
 export function serveAuthed(payload: any): string {
   const method = up(payload?.method);
   const path = str(payload?.path);
   const query = str(payload?.query);
   const body = str(payload?.body);
+  // Which folder's page is this? Core resolved it from the page's
+  // `x-peckboard-*` header before handing us the request.
+  const folderId = callerFolder();
 
   try {
     if (method === "GET" && path === `${API}/status`) {
@@ -57,17 +71,26 @@ export function serveAuthed(payload: any): string {
         graphify_installed: p.installed,
         python_bin: p.python_bin,
         version: p.version,
+        folder_known: folderId !== null,
+        folder_enabled: folderEnabled(folderId),
       });
     }
     if (method === "GET" && path === `${API}/repos`) {
-      return jsonResponse(200, listRepos());
+      return jsonResponse(200, listRepos(folderId));
+    }
+    if (method === "POST" && path === `${API}/enable`) {
+      return jsonResponse(200, setEnabled(folderId, parseBody(body)));
     }
     if (method === "GET" && path === `${API}/graph`) {
-      return jsonResponse(200, repoGraph(queryParam(query, "repo") ?? "."));
+      const repo = queryParam(query, "repo") ?? ".";
+      const refusal = gate(folderId, repo);
+      return refusal ? jsonResponse(200, refusal) : jsonResponse(200, repoGraph(repo));
     }
     if (method === "POST" && path === `${API}/build`) {
       const b = parseBody(body);
-      return jsonResponse(200, graphifyBuild({ repo: b?.repo, update: b?.update }));
+      // Through the tool, so the page and the agent cannot disagree about what
+      // a build is allowed to touch.
+      return jsonResponse(200, graphifyBuild({ repo: b?.repo, update: b?.update }, { folder_id: folderId }));
     }
     if (method === "POST" && path === `${API}/install`) {
       return jsonResponse(200, installGraphify());
@@ -78,19 +101,48 @@ export function serveAuthed(payload: any): string {
   return jsonResponse(404, { error: "not found" });
 }
 
-/// Every graph target in the folder plus, for the ones already built, their
-/// headline numbers. One driver call: the walk and every summary share a single
-/// interpreter start.
-function listRepos(): any {
+/// Flip one switch. `scope: "folder"` turns graphify on or off for the whole
+/// folder; `scope: "repo"` does one repo inside it.
+function setEnabled(folderId: string | null, body: any): any {
+  if (folderId === null) {
+    throw new Error(
+      "this page could not be tied to a folder — open Graphify from a project or session",
+    );
+  }
+  const enabled = body?.enabled === true;
+  const scope = str(body?.scope) || "folder";
+  if (scope === "folder") {
+    setFolderEnabled(folderId, enabled);
+  } else if (scope === "repo") {
+    const repo = resolveRepoPath(body?.repo);
+    setRepoEnabled(folderId, repo, enabled);
+  } else {
+    throw new Error(`unknown scope '${scope}' — expected 'folder' or 'repo'`);
+  }
+  return { ok: true, scope, folder_enabled: folderEnabled(folderId), ...listRepos(folderId) };
+}
+
+/// Every graph target in the folder, each with its switch, plus — for the ones
+/// already built — their headline numbers. One driver call: the walk and every
+/// summary share a single interpreter start.
+///
+/// The walk itself is NOT gated: an operator has to see the repos in order to
+/// decide which ones to switch on, and listing directory names is not what the
+/// switch is protecting.
+function listRepos(folderId: string | null): any {
   const payload = runDriver({ sub: "repos" }, QUERY_TIMEOUT_SECS);
   const entries = Array.isArray(payload?.repos) ? payload.repos : [];
   return {
     graphify_installed: payload?.installed === true,
+    folder_known: folderId !== null,
+    folder_enabled: folderEnabled(folderId),
     repos: entries.map((entry: any) => {
       const summary = summarizeTotals(entry?.has_graph === true ? entry : { totals: {} });
+      const path = str(entry?.path) || ".";
       return {
-        path: str(entry?.path) || ".",
+        path,
         name: str(entry?.name) || ".",
+        enabled: repoEnabled(folderId, path),
         has_graph: entry?.has_graph === true,
         nodes: summary.nodes,
         edges: summary.edges,
