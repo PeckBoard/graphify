@@ -9,7 +9,7 @@ const DESCRIPTION =
   "system prompt telling the agent the graph exists and when to prefer it over " +
   "reading files, and ships a per-repo visualizer. Off until switched on: each " +
   "folder, and each repo inside it, is enabled from the Graphify page.";
-const VERSION = "0.3.0";
+const VERSION = "0.3.1";
 const REPOSITORY = "https://github.com/PeckBoard/graphify";
 
 // Inline SVG (lucide "waypoints") for the sidebar entry; rendered sandboxed.

@@ -86,6 +86,13 @@ MAX_REPOS = 200
 
 GOD_NODE_COUNT = 20
 
+# Core drains a plugin's stdout into a 1 MiB buffer and HARD-CUTS the overflow,
+# so an oversized result arrives as invalid JSON rather than a big one. Budget
+# well under that and shrink the drawn slice to fit; the node cap alone doesn't
+# bound the bytes, because the links between kept nodes grow with density.
+PAYLOAD_BUDGET_BYTES = 900000
+MIN_DRAWN_NODES = 100
+
 # PyPI distribution name (the import name is \`graphify\`), and the private venv
 # the plugin installs it into, at the folder root. The leading dot keeps it out
 # of graphify's own file walk and out of this driver's repo scan.
@@ -246,28 +253,33 @@ def _payload(root, rel, max_nodes):
     if max_nodes <= 0:
         return payload
 
-    keep_ids = sorted(degree, key=lambda n: degree[n], reverse=True)[:max_nodes]
-    payload["truncated"] = len(keep_ids) < G.number_of_nodes()
-    keep = set(keep_ids)
-    for nid in keep_ids:
-        data = G.nodes[nid]
-        payload["nodes"].append({
+    ranked = sorted(degree, key=lambda n: degree[n], reverse=True)
+    limit = min(max_nodes, len(ranked))
+    while True:
+        keep_ids = ranked[:limit]
+        keep = set(keep_ids)
+        payload["nodes"] = [{
             "id": nid,
-            "label": data.get("label", nid),
-            "community": data.get("community"),
-            "source_file": data.get("source_file", ""),
-            "source_location": str(data.get("source_location", "")),
+            "label": G.nodes[nid].get("label", nid),
+            "community": G.nodes[nid].get("community"),
+            "source_file": G.nodes[nid].get("source_file", ""),
+            "source_location": str(G.nodes[nid].get("source_location", "")),
             "degree": degree[nid],
-        })
-    for u, v, edata in G.edges(data=True):
-        if u in keep and v in keep:
-            payload["links"].append({
-                "source": u,
-                "target": v,
-                "relation": edata.get("relation", ""),
-                "confidence": str(edata.get("confidence") or ""),
-            })
-    return payload
+        } for nid in keep_ids]
+        payload["links"] = [{
+            "source": u,
+            "target": v,
+            "relation": edata.get("relation", ""),
+            "confidence": str(edata.get("confidence") or ""),
+        } for u, v, edata in G.edges(data=True) if u in keep and v in keep]
+        payload["truncated"] = len(keep_ids) < G.number_of_nodes()
+        size = len(json.dumps(payload).encode("utf-8"))
+        if size <= PAYLOAD_BUDGET_BYTES or limit <= MIN_DRAWN_NODES:
+            return payload
+        # Scale to the overshoot rather than halving: bytes track nodes closely
+        # enough that one or two passes land it, and it keeps far more of the
+        # graph than a blind halving would.
+        limit = max(MIN_DRAWN_NODES, min(limit - 1, int(limit * PAYLOAD_BUDGET_BYTES / size * 0.9)))
 
 
 def _score_nodes(G, terms):
@@ -758,6 +770,15 @@ export function parseDriverOutput(res: ExecResult, sub: string): any {
   }
   const line = lastJsonLine(res.stdout);
   if (line === null) {
+    // A hard cut at core's 1 MiB stdout cap lands mid-JSON, so the tail looks
+    // like garbage rather than an error. Name the real cause — the driver
+    // shrinks the drawn slice to fit, so reaching this means something else
+    // (a chatty library on stdout) filled the buffer.
+    if (res.stdout_truncated) {
+      throw new Error(
+        `graphify ${sub} wrote more than the 1 MiB output limit, so its result was cut off mid-JSON`,
+      );
+    }
     const noise = (res.stderr || res.stdout || "").trim().split("\n").slice(-3).join(" | ");
     throw new Error(
       `graphify ${sub} produced no result (exit ${res.exit_code})${noise ? `: ${noise}` : ""}`,

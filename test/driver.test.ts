@@ -172,6 +172,20 @@ describe("the single-line-JSON stdout contract", () => {
       "graphify probe produced no result (exit 1): python3: No module named pip",
     );
   });
+
+  it("names the output cap when the result was cut off mid-JSON", () => {
+    // Core hard-cuts at 1 MiB, so the tail is a half-written object rather
+    // than an error — without this the user sees "produced no result (exit 0)"
+    // followed by a wall of valid-looking JSON.
+    const res = execResult({
+      exit_code: 0,
+      stdout: '{"ok": true, "repo": "web", "nodes": [{"id": "a", "lab',
+      stdout_truncated: true,
+    });
+    expect(() => parseDriverOutput(res, "graph")).toThrow(
+      "graphify graph wrote more than the 1 MiB output limit",
+    );
+  });
 });
 
 describe("the Python program", () => {
@@ -185,6 +199,16 @@ describe("the Python program", () => {
     for (const sub of ["probe", "repos", "build", "summary", "graph", "path", "explain"]) {
       expect(PYTHON_DRIVER, sub).toContain(`"${sub}": cmd_`);
     }
+  });
+
+  it("shrinks the drawn slice until the payload fits the output cap", () => {
+    // The node cap alone doesn't bound the bytes: links between kept nodes
+    // grow with density, so a 1500-node slice of a dense graph can exceed
+    // 1 MiB and arrive truncated. See PAYLOAD_BUDGET_BYTES.
+    expect(PYTHON_DRIVER).toContain("PAYLOAD_BUDGET_BYTES = 900000");
+    expect(PYTHON_DRIVER).toContain("MIN_DRAWN_NODES = 100");
+    expect(PYTHON_DRIVER).toContain('size = len(json.dumps(payload).encode("utf-8"))');
+    expect(PYTHON_DRIVER).toContain("if size <= PAYLOAD_BUDGET_BYTES or limit <= MIN_DRAWN_NODES:");
   });
 
   it("survives the template literal intact — no stray interpolation", () => {
