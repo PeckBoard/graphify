@@ -58,6 +58,11 @@ describe("the manifest's page surfaces", () => {
   it("holds contribute_sidebar, which core requires for those entries", () => {
     expect(m.permissions).toContain("contribute_sidebar");
   });
+
+  it("ships auto_install OFF — missing graphify is a handoff, not a silent venv", () => {
+    const setting = m.settings.find((s: any) => s.key === "auto_install");
+    expect(setting.default).toBe(false);
+  });
 });
 
 describe("the enable route", () => {

@@ -9,7 +9,7 @@ const DESCRIPTION =
   "system prompt telling the agent the graph exists and when to prefer it over " +
   "reading files, and ships a per-repo visualizer. Off until switched on: each " +
   "folder, and each repo inside it, is enabled from the Graphify page.";
-const VERSION = "0.3.1";
+const VERSION = "0.4.0";
 const REPOSITORY = "https://github.com/PeckBoard/graphify";
 
 // Inline SVG (lucide "waypoints") for the sidebar entry; rendered sandboxed.
@@ -112,11 +112,14 @@ export function manifestJson(): string {
         key: "auto_install",
         title: "Install graphify automatically",
         type: "boolean",
-        default: true,
+        default: false,
         description:
-          "When graphify is missing, run 'pip install --user graphifyy' before the first build. " +
-          "A cold install can exceed the 600s command ceiling; if it does, the page shows the " +
-          "command to run by hand.",
+          "Off (default): when graphify is missing, tools answer with a handoff — install " +
+          "python3, pip, and the 'graphifyy' pip package from the App Manager page (graphify " +
+          "cannot trigger that itself), or run the manual command — and nothing is installed " +
+          "behind your back. On (legacy): graphify installs graphifyy into a private venv " +
+          "(.graphify-venv) at the folder root before the first build; a cold install can " +
+          "exceed the 600s command ceiling, and the page then shows the command to run by hand.",
       },
       {
         key: "prompt_mode",

@@ -20,13 +20,24 @@ export const DEFAULT_PYTHON = "python3";
 /// PyPI distribution name. The import name is `graphify`, not this.
 export const PYPI_PACKAGE = "graphifyy";
 
-/// What a user runs by hand when the automatic install outruns the command
-/// ceiling. Surfaced verbatim so it can be copy-pasted. Mirrors what the
-/// driver's `install` subcommand does: a private venv at the folder root, so it
-/// works on hosts whose system Python has no pip or is externally managed.
+/// What a user runs by hand when they don't have the App Manager plugin (the
+/// preferred install path — see `installHandoff`) or when the legacy automatic
+/// install outruns the command ceiling. Surfaced verbatim so it can be
+/// copy-pasted. Mirrors what the driver's `install` subcommand does: a private
+/// venv at the folder root, so it works on hosts whose system Python has no
+/// pip or is externally managed.
 export const MANUAL_INSTALL_COMMAND =
   "python3 -m venv .graphify-venv && .graphify-venv/bin/python -m pip install graphifyy";
 
+/// Where the App Manager plugin's dashboard lives in the Peckboard UI (its
+/// sidebar item `app-manager`, served at /plugin-page/<plugin id>/<item id>).
+/// A path to point a PERSON at — plugins are fully isolated, so graphify can
+/// never call the App Manager or trigger an install through it.
+export const APP_MANAGER_PAGE = "/plugin-page/app-manager/app-manager";
+
+/// What to install there, in order: interpreter, installer, then the package
+/// (a pip-namespace entry in the App Manager's catalog).
+export const APP_MANAGER_INSTALL = ["python3", "pip", "graphifyy"];
 /// A cold install pulls graspologic (scipy/numba) plus ~14 tree-sitter wheels.
 /// 600 is core's EXEC_MAX_TIMEOUT_SECS — asking for more is silently clamped.
 export const INSTALL_TIMEOUT_SECS = 600;
@@ -881,15 +892,56 @@ export function installGraphify(): InstallResult {
   };
 }
 
-/// Guarantee graphify is importable before a tool runs, installing it first if
-/// the `auto_install` setting allows. Throws with the manual command otherwise.
-export function ensureGraphify(): ProbeResult {
+/// The structured "graphify is missing" answer a tool returns instead of a
+/// bare error: what is missing, where a person can install it, and the
+/// fallbacks. A HANDOFF, not an integration — see `app_manager.note`.
+export interface InstallHandoff {
+  installed: false;
+  error: string;
+  next_step: string;
+  app_manager: {
+    page: string;
+    install: string[];
+    note: string;
+  };
+  manual_command: string;
+}
+
+export function installHandoff(first: ProbeResult): InstallHandoff {
+  return {
+    installed: false,
+    error: `graphify is not installed for ${first.python_bin}`,
+    next_step:
+      `open the App Manager page (${APP_MANAGER_PAGE}) and install ` +
+      `${APP_MANAGER_INSTALL.map((n) => `'${n}'`).join(", ")} — graphify cannot trigger that ` +
+      `install itself, a person has to run it there. Without the App Manager plugin, run by ` +
+      `hand: ${MANUAL_INSTALL_COMMAND}. Or enable this plugin's 'auto_install' setting ` +
+      `(off by default) to let graphify install into a private venv at the folder root.`,
+    app_manager: {
+      page: APP_MANAGER_PAGE,
+      install: [...APP_MANAGER_INSTALL],
+      note:
+        "A handoff, not an integration: plugins are isolated, so graphify can only point at " +
+        "the App Manager — it cannot invoke it, and nothing installs automatically.",
+    },
+    manual_command: MANUAL_INSTALL_COMMAND,
+  };
+}
+
+export type EnsureResult =
+  | { ready: true; probe: ProbeResult }
+  | { ready: false; handoff: InstallHandoff };
+
+/// Make sure graphify is importable before a tool runs. When it is missing,
+/// the default answer is the HANDOFF above — silently creating a venv at the
+/// folder root behind the user's back is how `.graphify-venv/` litter
+/// happens. Only the explicit `auto_install` setting (default OFF) restores
+/// the legacy self-install; its failure modes still throw, exactly as before.
+export function ensureGraphifyReady(): EnsureResult {
   const first = probe();
-  if (first.installed) return first;
-  if (!boolSetting("auto_install", true)) {
-    throw new Error(
-      `graphify is not installed for ${first.python_bin}. Enable "Install graphify automatically" in the plugin settings, or run: ${MANUAL_INSTALL_COMMAND}`,
-    );
+  if (first.installed) return { ready: true, probe: first };
+  if (!boolSetting("auto_install", false)) {
+    return { ready: false, handoff: installHandoff(first) };
   }
   const install = installGraphify();
   if (install.timed_out) {
@@ -902,7 +954,7 @@ export function ensureGraphify(): ProbeResult {
       `installing graphify failed — run it by hand: ${MANUAL_INSTALL_COMMAND}\n${install.output}`,
     );
   }
-  return probe();
+  return { ready: true, probe: probe() };
 }
 
 /// Keep the tail of a long command output; the head of a pip log is boilerplate

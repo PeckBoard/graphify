@@ -136,15 +136,55 @@ never misreports its size.
 
 ## Installing graphify
 
-The plugin runs `python3 -m pip install --user graphifyy` on the first build
-when the `auto_install` setting is on. A cold install pulls graspologic
-(scipy/numba) plus ~14 tree-sitter wheels and can legitimately outrun core's
-600-second command ceiling; when it does, the result carries the exact command
-to run by hand rather than reporting a success that never happened:
+**Installing is a handoff, not an integration.** Peckboard plugins are fully
+isolated from each other, so graphify cannot invoke the App Manager (or any
+other plugin) — it can only point a person at it, and nothing installs
+automatically.
 
-```bash
-python3 -m pip install --user graphifyy
+When a tool runs and graphify's Python package is missing, the tool answers
+with a structured handoff instead of installing anything:
+
+```json
+{
+  "installed": false,
+  "error": "graphify is not installed for python3",
+  "next_step": "open the App Manager page (/plugin-page/app-manager/app-manager) and install 'python3', 'pip', 'graphifyy' — …",
+  "app_manager": {
+    "page": "/plugin-page/app-manager/app-manager",
+    "install": ["python3", "pip", "graphifyy"],
+    "note": "A handoff, not an integration: …"
+  },
+  "manual_command": "python3 -m venv .graphify-venv && .graphify-venv/bin/python -m pip install graphifyy"
+}
 ```
+
+- **App Manager path (recommended):** install `python3`, `pip`, and the
+  `graphifyy` pip package from the App Manager page. The App Manager tracks
+  `graphifyy` in its own **pip namespace** (versions via
+  `pip list --format=freeze`, dependency edges via `pip show`), clearly
+  labelled apart from system packages — and a person has to click Install
+  there; graphify cannot do it for them.
+- **Manual fallback** (no App Manager installed):
+
+  ```bash
+  python3 -m venv .graphify-venv && .graphify-venv/bin/python -m pip install graphifyy
+  ```
+
+- **Legacy self-install:** the `auto_install` setting (**off by default**)
+  restores the old behaviour: before the first build the plugin creates a
+  private venv `.graphify-venv/` at the folder root and pip-installs
+  `graphifyy` into it. A cold install pulls graspologic (scipy/numba) plus
+  ~14 tree-sitter wheels and can legitimately outrun core's 600-second
+  command ceiling; when it does, the result carries the manual command rather
+  than reporting a success that never happened. The Graphify page's **Install
+  graphify** button runs this same self-install on an explicit click,
+  whatever the setting says.
+
+The driver probes with the configured interpreter and also looks inside the
+folder-root `.graphify-venv/`, so either install location works. The App
+Manager's pip install goes to the **user site**, not that venv — the two
+locations are independent, and the App Manager neither sees nor manages
+`.graphify-venv/`.
 
 `python_bin` must name an interpreter on core's exec allowlist — `python3` or
 `python`.
@@ -169,7 +209,7 @@ python3 -m pip install --user graphifyy
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | `python_bin` | enum | `python3` | Interpreter that runs the driver. Must be on core's exec allowlist. |
-| `auto_install` | boolean | `true` | Run `pip install --user graphifyy` when graphify is missing. |
+| `auto_install` | boolean | `false` | Off: a missing graphify becomes an App Manager handoff — nothing installs itself. On (legacy): self-install into `.graphify-venv/` at the folder root. |
 | `prompt_mode` | enum | `when_graph_exists` | Whether to tell the agent about the graph: only when one exists, always, or never. |
 | `path_image` | boolean | `true` | Return a found `graphify_path` as a diagram the chat renders inline. |
 | `build_timeout_secs` | integer | `600` | How long one build may run before core kills it. |

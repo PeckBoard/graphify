@@ -385,9 +385,21 @@ function installBanner() {
     g.appendChild(el("span", "note", inst.error));
   } else {
     g.appendChild(el("b", "", "graphify isn't installed. "));
-    g.appendChild(
-      el("span", "note", "Install it to build knowledge graphs (pip install --user graphifyy)."),
-    );
+    // Preferred path: the App Manager (python3 + pip + the graphifyy pip
+    // package). A handoff, not an integration — the link just opens that page
+    // (new tab: the sandboxed iframe cannot navigate the app itself), and a
+    // person runs the install there. The button below is the legacy
+    // self-install into a private venv (.graphify-venv) at the folder root.
+    const note = el("span", "note",
+      "Recommended: install python3, pip, and the 'graphifyy' package from the ");
+    const amLink = el("a", "", "App Manager");
+    amLink.href = "/plugin-page/app-manager/app-manager";
+    amLink.target = "_blank";
+    amLink.rel = "noreferrer";
+    note.appendChild(amLink);
+    note.appendChild(document.createTextNode(
+      " (needs that plugin). Or use the button to self-install into a private venv (.graphify-venv)."));
+    g.appendChild(note);
   }
   b.appendChild(g);
   const btn = el("button", "primary");

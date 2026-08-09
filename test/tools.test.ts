@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { graphifyBuild, graphifyExplain, graphifyPath } from "../src/tools";
+import { APP_MANAGER_PAGE, MANUAL_INSTALL_COMMAND } from "../src/driver";
 
 // tools.ts talks to core through the Extism FFI (Host.getFunctions() +
 // Memory), so the boundary is faked here rather than the modules under test:
@@ -182,5 +183,84 @@ describe("graphify_path diagram", () => {
     expect(() => graphifyPath({ source: "a", target: "b", repo: "../etc" }, CTX)).toThrow(
       "escapes the folder root",
     );
+  });
+});
+
+describe("the App Manager handoff when graphify is missing", () => {
+  beforeEach(() => {
+    hostCalls = [];
+  });
+
+  /// graphify NOT importable, both switches on, settings as given. `execImpl`
+  /// overrides the driver exec (argv: ["-c", DRIVER, sub, ...]).
+  function stubMissing(
+    settings: Record<string, unknown> = {},
+    execImpl?: (args: string[]) => unknown,
+  ) {
+    const docs: Record<string, unknown> = { ...switchedOn() };
+    handlers = {
+      peckboard_get_plugin_setting: ({ key: k }) => ({ value: settings[k] ?? null }),
+      peckboard_store_get: ({ collection, key: k }) => ({
+        value: docs[`${collection}/${k}`] ?? null,
+      }),
+      peckboard_store_put: ({ collection, key: k, data }) => {
+        docs[`${collection}/${k}`] = data;
+        return {};
+      },
+      peckboard_exec: ({ args }) =>
+        execImpl
+          ? execImpl(args)
+          : args[2] === "probe"
+            ? driverStdout({ installed: false, version: null })
+            : driverStdout({ ok: true }),
+    };
+  }
+
+  it("every tool returns the structured handoff — and installs nothing — by default", () => {
+    for (const call of [
+      () => graphifyBuild({}, CTX),
+      () => graphifyPath({ source: "a", target: "b" }, CTX),
+      () => graphifyExplain({ label: "x" }, CTX),
+    ]) {
+      stubMissing();
+      hostCalls = [];
+      const result = call();
+      expect(result.installed).toBe(false);
+      expect(result.error).toContain("graphify is not installed");
+      // Actionable: names the App Manager page, what to install there, and
+      // the manual fallback.
+      expect(result.next_step).toContain(APP_MANAGER_PAGE);
+      expect(result.next_step).toContain(MANUAL_INSTALL_COMMAND);
+      expect(result.app_manager.page).toBe(APP_MANAGER_PAGE);
+      expect(result.app_manager.install).toEqual(["python3", "pip", "graphifyy"]);
+      // Honest wording: a handoff, never an auto-install.
+      expect(result.app_manager.note).toContain("cannot invoke");
+      // auto_install defaults OFF: the probe ran, the install subcommand
+      // (which would create .graphify-venv) did not.
+      const subs = hostCalls
+        .filter((c) => c.name === "peckboard_exec")
+        .map((c) => c.input.args[2]);
+      expect(subs).toEqual(["probe"]);
+    }
+  });
+
+  it("self-installs only when auto_install is explicitly on (legacy path)", () => {
+    let installed = false;
+    stubMissing({ auto_install: true }, (args) => {
+      if (args[2] === "probe") {
+        return driverStdout({ installed, version: installed ? "0.9.0" : null });
+      }
+      if (args[2] === "install") {
+        installed = true;
+        return driverStdout({ ok: true, installed: true, version: "0.9.0", exit_code: 0, output: "ok" });
+      }
+      return driverStdout({ totals: { nodes: 1, edges: 0, communities: 1 } });
+    });
+    const result = graphifyBuild({}, CTX);
+    expect(result.nodes).toBe(1);
+    const subs = hostCalls
+      .filter((c) => c.name === "peckboard_exec")
+      .map((c) => c.input.args[2]);
+    expect(subs).toContain("install");
   });
 });

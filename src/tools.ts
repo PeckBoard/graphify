@@ -4,15 +4,18 @@
 // and returns a plain object — `lib.ts` wraps a throw into `{error}` for the
 // agent, so a failure here reads as a tool result it can act on.
 //
-// The gate comes FIRST, before argument validation and before `ensureGraphify`:
-// a folder nobody switched on must not so much as trigger a pip install.
+// The gate comes FIRST, before argument validation and before
+// `ensureGraphifyReady`: a folder nobody switched on must not so much as
+// trigger a probe. When graphify is missing, tools return the structured App
+// Manager handoff (see `installHandoff` in driver.ts) instead of a bare
+// error — an actionable next_step, and never a silent self-install.
 
 import { errMsg } from "./verdict";
 import { storeGet, storePut } from "./host";
 import {
   QUERY_TIMEOUT_SECS,
   buildTimeoutSecs,
-  ensureGraphify,
+  ensureGraphifyReady,
   pathImageEnabled,
   resolveRepoPath,
   runDriver,
@@ -70,7 +73,8 @@ export function graphifyBuild(args: any, context?: any): any {
   // re-extract only what changed. `false` means drop the cache first.
   const update = args?.update === undefined || args?.update === null ? true : args.update === true;
 
-  ensureGraphify();
+  const ready = ensureGraphifyReady();
+  if (!ready.ready) return ready.handoff;
   try {
     const payload = runDriver({ sub: "build", repo, full: !update }, buildTimeoutSecs());
     const summary = summarizeTotals(payload);
@@ -109,7 +113,8 @@ export function graphifyPath(args: any, context?: any): any {
   const target = requiredString(args, "target");
   const maxHops = boundedInt(args?.max_hops, 8, 1, 32);
 
-  ensureGraphify();
+  const ready = ensureGraphifyReady();
+  if (!ready.ready) return ready.handoff;
   const result = withBuildHint(repo, () =>
     runDriver({ sub: "path", repo, source, target, maxHops }, QUERY_TIMEOUT_SECS),
   );
@@ -136,7 +141,8 @@ export function graphifyExplain(args: any, context?: any): any {
   if (refusal) return refusal;
   const label = requiredString(args, "label");
 
-  ensureGraphify();
+  const ready = ensureGraphifyReady();
+  if (!ready.ready) return ready.handoff;
   return withBuildHint(repo, () => runDriver({ sub: "explain", repo, label }, QUERY_TIMEOUT_SECS));
 }
 
