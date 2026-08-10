@@ -358,17 +358,33 @@ function buildElapsed(started) {
 // The App Manager handoff, with the request prefilled: App Manager >= 0.6.0
 // reads ?install=…&from=… and names those apps in a request bar, each with its
 // own Install button. A handoff, not an integration — plugins are isolated, so
-// this only OPENS that page (new tab: the sandboxed iframe cannot navigate the
-// app itself) and a person clicks Install there. Keep in sync with
-// APP_MANAGER_LINK in src/driver.ts.
+// this only OPENS that page and a person clicks Install there. Keep in sync
+// with APP_MANAGER_LINK in src/driver.ts.
+const APP_MANAGER_QUERY = "install=python3,pip,graphifyy&from=graphify";
 const APP_MANAGER_LINK =
-  "/plugin-page/app-manager/app-manager?install=python3,pip,graphifyy&from=graphify";
+  "/plugin-page/app-manager/app-manager?" + APP_MANAGER_QUERY;
 
+// Ask the host to navigate: this iframe is sandboxed without
+// allow-same-origin, and a target=_blank tab INHERITS that sandbox — the
+// opaque origin it lands in gets the app's own assets 403'd by core's
+// origin check, so the tab comes up blank. The host handles
+// `plugin-ui-open-page` (Peckboard >= 0.0.168). The href stays real so the
+// link is still copyable, and middle-click/context-menu keep working.
 function appManagerButton(label) {
   const a = el("a", "btnlink", label || "Install from App Manager");
   a.href = APP_MANAGER_LINK;
-  a.target = "_blank";
-  a.rel = "noreferrer";
+  a.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    window.parent.postMessage(
+      {
+        type: "plugin-ui-open-page",
+        plugin: "app-manager",
+        item: "app-manager",
+        query: APP_MANAGER_QUERY,
+      },
+      "*",
+    );
+  });
   return a;
 }
 

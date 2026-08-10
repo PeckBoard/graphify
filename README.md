@@ -160,16 +160,21 @@ with a structured handoff instead of installing anything:
 
 - **App Manager path (recommended):** every "graphify isn't installed" banner
   on the Graphify page — including the **install failed** and **timed out**
-  ones — carries an **Install from App Manager** button. It opens the App
-  Manager in a new tab with the request prefilled
+  ones — carries an **Install from App Manager** button. Clicking it asks the
+  host to open the App Manager page with the request prefilled
   (`?install=python3,pip,graphifyy&from=graphify`, read by App Manager 0.6.0
-  and later; older builds just open the page), so those three land in a
-  request bar with an Install button each. The App Manager tracks `graphifyy`
-  in its own **pip namespace** (versions via `pip list --format=freeze`,
-  dependency edges via `pip show`), clearly labelled apart from system
-  packages. The link only prefills the form — a person still clicks Install
-  there; graphify cannot do it for them.
-  there; graphify cannot do it for them.
+  and later), so those three land in a request bar with an Install button
+  each. The App Manager tracks `graphifyy` in its own **pip namespace**
+  (versions via `pip list --format=freeze`, dependency edges via `pip show`),
+  clearly labelled apart from system packages. The link only prefills the
+  form — a person still clicks Install there; graphify cannot do it for them.
+
+  The button posts `plugin-ui-open-page` to the host rather than opening a
+  tab, and so needs **Peckboard >= 0.0.168**. A `target=_blank` tab cannot
+  work: plugin pages are framed in an iframe sandboxed without
+  `allow-same-origin`, a popup inherits that sandbox, and the opaque origin it
+  lands in makes the app's own asset requests carry `Origin: null` — which
+  core's CSRF origin check answers with 403, so the tab renders blank.
 - **Manual fallback** (no App Manager installed):
 
   ```bash
