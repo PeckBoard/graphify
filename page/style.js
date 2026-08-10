@@ -45,6 +45,14 @@ button.primary:hover { background: var(--accent-hover); }
 button:disabled { opacity: 0.55; cursor: default; }
 button.ghost { background: none; border-color: transparent; }
 button.ghost:hover { background: var(--surface-hover); }
+/* The App Manager handoff: an anchor (it opens another page in a new tab),
+   wearing the primary button's skin so it reads as the recommended action. */
+a.btnlink {
+  display: inline-block; background: var(--accent); border: 1px solid transparent;
+  border-radius: 6px; padding: 5px 11px; font: inherit; color: #fff;
+  text-decoration: none; cursor: pointer; white-space: nowrap;
+}
+a.btnlink:hover { background: var(--accent-hover); }
 :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 input {
   background: var(--surface); color: var(--text); border: 1px solid var(--border);

@@ -38,6 +38,13 @@ export const APP_MANAGER_PAGE = "/plugin-page/app-manager/app-manager";
 /// What to install there, in order: interpreter, installer, then the package
 /// (a pip-namespace entry in the App Manager's catalog).
 export const APP_MANAGER_INSTALL = ["python3", "pip", "graphifyy"];
+
+/// The same page with the request prefilled. App Manager >= 0.6.0 reads
+/// `?install=…&from=…` and names those apps in a request bar with an Install
+/// button each; older builds ignore the query and open normally. Still a
+/// handoff: the link fills the form in, a person clicks Install there.
+export const APP_MANAGER_LINK =
+  `${APP_MANAGER_PAGE}?install=${APP_MANAGER_INSTALL.join(",")}&from=graphify`;
 /// A cold install pulls graspologic (scipy/numba) plus ~14 tree-sitter wheels.
 /// 600 is core's EXEC_MAX_TIMEOUT_SECS — asking for more is silently clamped.
 export const INSTALL_TIMEOUT_SECS = 600;
@@ -912,13 +919,13 @@ export function installHandoff(first: ProbeResult): InstallHandoff {
     installed: false,
     error: `graphify is not installed for ${first.python_bin}`,
     next_step:
-      `open the App Manager page (${APP_MANAGER_PAGE}) and install ` +
+      `open the App Manager page (${APP_MANAGER_LINK}) and install ` +
       `${APP_MANAGER_INSTALL.map((n) => `'${n}'`).join(", ")} — graphify cannot trigger that ` +
       `install itself, a person has to run it there. Without the App Manager plugin, run by ` +
       `hand: ${MANUAL_INSTALL_COMMAND}. Or enable this plugin's 'auto_install' setting ` +
       `(off by default) to let graphify install into a private venv at the folder root.`,
     app_manager: {
-      page: APP_MANAGER_PAGE,
+      page: APP_MANAGER_LINK,
       install: [...APP_MANAGER_INSTALL],
       note:
         "A handoff, not an integration: plugins are isolated, so graphify can only point at " +

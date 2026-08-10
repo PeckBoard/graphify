@@ -148,9 +148,9 @@ with a structured handoff instead of installing anything:
 {
   "installed": false,
   "error": "graphify is not installed for python3",
-  "next_step": "open the App Manager page (/plugin-page/app-manager/app-manager) and install 'python3', 'pip', 'graphifyy' — …",
+  "next_step": "open the App Manager page (/plugin-page/app-manager/app-manager?install=python3,pip,graphifyy&from=graphify) and install 'python3', 'pip', 'graphifyy' — …",
   "app_manager": {
-    "page": "/plugin-page/app-manager/app-manager",
+    "page": "/plugin-page/app-manager/app-manager?install=python3,pip,graphifyy&from=graphify",
     "install": ["python3", "pip", "graphifyy"],
     "note": "A handoff, not an integration: …"
   },
@@ -158,11 +158,17 @@ with a structured handoff instead of installing anything:
 }
 ```
 
-- **App Manager path (recommended):** install `python3`, `pip`, and the
-  `graphifyy` pip package from the App Manager page. The App Manager tracks
-  `graphifyy` in its own **pip namespace** (versions via
-  `pip list --format=freeze`, dependency edges via `pip show`), clearly
-  labelled apart from system packages — and a person has to click Install
+- **App Manager path (recommended):** every "graphify isn't installed" banner
+  on the Graphify page — including the **install failed** and **timed out**
+  ones — carries an **Install from App Manager** button. It opens the App
+  Manager in a new tab with the request prefilled
+  (`?install=python3,pip,graphifyy&from=graphify`, read by App Manager 0.6.0
+  and later; older builds just open the page), so those three land in a
+  request bar with an Install button each. The App Manager tracks `graphifyy`
+  in its own **pip namespace** (versions via `pip list --format=freeze`,
+  dependency edges via `pip show`), clearly labelled apart from system
+  packages. The link only prefills the form — a person still clicks Install
+  there; graphify cannot do it for them.
   there; graphify cannot do it for them.
 - **Manual fallback** (no App Manager installed):
 

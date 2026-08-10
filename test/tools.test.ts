@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { graphifyBuild, graphifyExplain, graphifyPath } from "../src/tools";
-import { APP_MANAGER_PAGE, MANUAL_INSTALL_COMMAND } from "../src/driver";
+import { APP_MANAGER_LINK, APP_MANAGER_PAGE, MANUAL_INSTALL_COMMAND } from "../src/driver";
 
 // tools.ts talks to core through the Extism FFI (Host.getFunctions() +
 // Memory), so the boundary is faked here rather than the modules under test:
@@ -231,7 +231,11 @@ describe("the App Manager handoff when graphify is missing", () => {
       // the manual fallback.
       expect(result.next_step).toContain(APP_MANAGER_PAGE);
       expect(result.next_step).toContain(MANUAL_INSTALL_COMMAND);
-      expect(result.app_manager.page).toBe(APP_MANAGER_PAGE);
+      expect(result.app_manager.page).toBe(APP_MANAGER_LINK);
+      // The link prefills the App Manager's request bar; it cannot install.
+      expect(APP_MANAGER_LINK).toBe(
+        `${APP_MANAGER_PAGE}?install=python3,pip,graphifyy&from=graphify`,
+      );
       expect(result.app_manager.install).toEqual(["python3", "pip", "graphifyy"]);
       // Honest wording: a handoff, never an auto-install.
       expect(result.app_manager.note).toContain("cannot invoke");

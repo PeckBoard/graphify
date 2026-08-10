@@ -355,28 +355,51 @@ function buildElapsed(started) {
   return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
 }
 
+// The App Manager handoff, with the request prefilled: App Manager >= 0.6.0
+// reads ?install=…&from=… and names those apps in a request bar, each with its
+// own Install button. A handoff, not an integration — plugins are isolated, so
+// this only OPENS that page (new tab: the sandboxed iframe cannot navigate the
+// app itself) and a person clicks Install there. Keep in sync with
+// APP_MANAGER_LINK in src/driver.ts.
+const APP_MANAGER_LINK =
+  "/plugin-page/app-manager/app-manager?install=python3,pip,graphifyy&from=graphify";
+
+function appManagerButton(label) {
+  const a = el("a", "btnlink", label || "Install from App Manager");
+  a.href = APP_MANAGER_LINK;
+  a.target = "_blank";
+  a.rel = "noreferrer";
+  return a;
+}
+
 function installBanner() {
   const b = el("div", "banner warn");
   const g = el("div", "grow");
   const inst = state.install;
   const r = inst.result;
+  const manual = (r && r.manual_command) || "pip install --user graphifyy";
   if (inst.phase === "done" && r && r.timed_out) {
     g.appendChild(el("b", "", "Install timed out. "));
     g.appendChild(
-      el("span", "note", "It may still be running — otherwise run this yourself, then Refresh:"),
+      el("span", "note",
+        "It may still be running — otherwise install python3, pip and 'graphifyy' " +
+        "from the App Manager, or run this yourself, then Refresh:"),
     );
     b.appendChild(g);
-    const code = el("code", "codebox", r.manual_command || "pip install --user graphifyy");
-    b.appendChild(code);
-    b.appendChild(copyButton(r.manual_command || "pip install --user graphifyy"));
+    b.appendChild(el("code", "codebox", manual));
+    b.appendChild(copyButton(manual));
+    b.appendChild(appManagerButton());
     return b;
   }
   if (inst.phase === "done" && r && !r.installed) {
     g.appendChild(el("b", "", "Install failed. "));
-    g.appendChild(el("span", "note", "Output below — or run it by hand:"));
+    g.appendChild(el("span", "note",
+      "Output below. Install python3, pip and 'graphifyy' from the App Manager " +
+      "instead — or run it by hand:"));
     b.appendChild(g);
-    b.appendChild(el("code", "codebox", r.manual_command || "pip install --user graphifyy"));
-    b.appendChild(copyButton(r.manual_command || "pip install --user graphifyy"));
+    b.appendChild(el("code", "codebox", manual));
+    b.appendChild(copyButton(manual));
+    b.appendChild(appManagerButton());
     if (r.output) b.appendChild(el("pre", "outbox", String(r.output).slice(-2000)));
     return b;
   }
@@ -385,23 +408,13 @@ function installBanner() {
     g.appendChild(el("span", "note", inst.error));
   } else {
     g.appendChild(el("b", "", "graphify isn't installed. "));
-    // Preferred path: the App Manager (python3 + pip + the graphifyy pip
-    // package). A handoff, not an integration — the link just opens that page
-    // (new tab: the sandboxed iframe cannot navigate the app itself), and a
-    // person runs the install there. The button below is the legacy
-    // self-install into a private venv (.graphify-venv) at the folder root.
-    const note = el("span", "note",
-      "Recommended: install python3, pip, and the 'graphifyy' package from the ");
-    const amLink = el("a", "", "App Manager");
-    amLink.href = "/plugin-page/app-manager/app-manager";
-    amLink.target = "_blank";
-    amLink.rel = "noreferrer";
-    note.appendChild(amLink);
-    note.appendChild(document.createTextNode(
-      " (needs that plugin). Or use the button to self-install into a private venv (.graphify-venv)."));
-    g.appendChild(note);
+    g.appendChild(el("span", "note",
+      "Recommended: install python3, pip, and the 'graphifyy' package from the " +
+      "App Manager (needs that plugin). Or use the button to self-install into a " +
+      "private venv (.graphify-venv)."));
   }
   b.appendChild(g);
+  b.appendChild(appManagerButton());
   const btn = el("button", "primary");
   if (inst.phase === "running") {
     btn.disabled = true;
