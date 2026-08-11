@@ -18,14 +18,28 @@ describe("composePrompt", () => {
     const block = composePrompt(STATS, true);
     expect(block).toContain("**Start here.**");
     expect(block).toContain("Before you read or search code");
+    // A rule with no stated exception is one the agent drops whole the first
+    // time it does not fit.
+    expect(block).toContain("Skip it only when");
     // How to call it, not just that it exists.
     expect(block).toContain("If a label misses");
     expect(block).toContain("Use it for:");
   });
+
+  it("tells the agent to rebuild and trace the blast radius after it edits", () => {
+    const block = composePrompt(STATS, true);
+    expect(block).toContain("After editing code");
+    expect(block).toContain("graphify_build()");
+    expect(block).toContain("before you report done");
+  });
+
   it("says what the graph is not, and where the multimodal pass lives", () => {
     const block = composePrompt(STATS, true);
     expect(block).toContain("code-only");
     expect(block).toContain("/graphify");
+    // The miss that reads as "this graph is useless" unless it is stated up
+    // front: a page held in one template literal is a single node.
+    expect(block).toContain("string literals");
     // The agent has to know when reading files still wins.
     expect(block).toContain("exact text");
   });
@@ -50,8 +64,8 @@ describe("composePrompt", () => {
   it("tells the agent to build one when there is no graph", () => {
     const block = composePrompt(null, false);
     expect(block).toContain("no graphify knowledge graph yet");
-    expect(block).toContain("graphify_build");
     expect(block).toContain("Build one before you start reading code");
+    expect(block).toContain("re-run `graphify_build()` after you");
     expect(block).not.toContain("Start here");
   });
 });

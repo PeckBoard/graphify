@@ -29,13 +29,14 @@ export function promptMode(): PromptMode {
 }
 
 // ── The block ────────────────────────────────────────────────────────────────
-
 /// Compose the system prompt block.
 ///
 /// Deliberately concrete and deliberately small: it tells the agent to reach
-/// for the graph FIRST, names the three tools, says how to call each and when
-/// each beats opening files, and says what the graph does NOT cover, so the
-/// agent doesn't ask it for prose it never ingested. Well under 2 KB — every
+/// for the graph FIRST and again AFTER it edits (a change's blast radius is
+/// exactly what a graph answers and a reader misses), names the three tools,
+/// and says what the graph does NOT cover — including code that lives inside
+/// string literals, which is invisible to the AST pass and is the miss most
+/// likely to make an agent write the whole block off. Well under 2 KB — every
 /// token here is paid on every turn of every session in the folder.
 export function composePrompt(stats: GraphStats | null, hasGraph: boolean): string {
   const lines: string[] = ["## Graphify knowledge graph", ""];
@@ -45,8 +46,8 @@ export function composePrompt(stats: GraphStats | null, hasGraph: boolean): stri
       "This folder has no graphify knowledge graph yet. Build one before you start reading code:",
       "`graphify_build()` runs a deterministic tree-sitter pass over the source files (no LLM, no",
       "network) and writes `graphify-out/graph.json`, usually in seconds. After that, start every",
-      "code task with `graphify_explain` / `graphify_path` — they answer structural questions far",
-      "faster than reading files.",
+      "code task with `graphify_explain` / `graphify_path`, and re-run `graphify_build()` after you",
+      "edit code so you can trace what your change reaches.",
     );
   } else {
     const size = stats
@@ -56,20 +57,23 @@ export function composePrompt(stats: GraphStats | null, hasGraph: boolean): stri
       `This folder has a graphify knowledge graph${size} at \`graphify-out/graph.json\`.`,
       "",
       "**Start here.** Before you read or search code, call `graphify_explain` on the most relevant",
-      "symbol, file, or feature name in the request. One call replaces several rounds of",
-      "search-and-read and tells you which files are worth opening. Fall back to search only when",
-      "the graph misses.",
+      "symbol, file, or feature name in the request — it tells you which files are worth opening.",
+      "Skip it only when you already know the exact file and symbol, or the target is markup, CSS or",
+      "config the AST does not index.",
+      "",
+      "**Then check what you changed.** After editing code, run `graphify_build()` and trace every",
+      "symbol you touched with `graphify_path` / `graphify_explain` out to whatever depends on it —",
+      "before you report done. The callers you never opened are the ones a change breaks.",
       "",
       "- `graphify_explain(label)` — what X is, where it is defined, every direct neighbour with the",
       "  relation and confidence on each edge, and the cluster it belongs to. If a label misses,",
       "  retry with a shorter, differently-cased, or unqualified name.",
       "- `graphify_path(source, target)` — how A actually reaches B, hop by hop, with a diagram. Use",
       '  it for "does X call Y", tracing a flow, blast radius, and dead-code checks.',
-      "- `graphify_build()` — refresh after substantial code changes, and before trusting the graph",
-      "  on code you just wrote.",
+      "- `graphify_build()` — rebuild it; the other two read the last build, not your edits.",
       "",
-      "Use it for: orienting in unfamiliar code, finding a definition or its callers, tracing a flow",
-      "across files, sizing the blast radius of a change, listing the files a task will touch.",
+      "Use it for: orienting in unfamiliar code, finding a definition or its callers, sizing the",
+      "blast radius of a change, listing the files a task will touch.",
       "",
       "Read files when you need exact text, line numbers, comments, or anything an AST does not",
       "carry; the graph tells you where to look, not what the code says.",
@@ -78,8 +82,9 @@ export function composePrompt(stats: GraphStats | null, hasGraph: boolean): stri
 
   lines.push(
     "",
-    "The graph is code-only: a tree-sitter AST pass over source files, with no docs, PDFs or",
-    "images in it. For a multimodal graph that covers those too, run the `/graphify` skill.",
+    "The graph is code-only: a tree-sitter AST pass over source files. No docs, PDFs or images, and",
+    "no code inside string literals (a templated HTML/CSS page is one node), no CSS, no markup — a",
+    "miss there is expected, so fall back to search. For a multimodal graph, run the `/graphify` skill.",
   );
   return lines.join("\n");
 }
