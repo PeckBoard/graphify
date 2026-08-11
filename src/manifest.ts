@@ -6,10 +6,10 @@ const DESCRIPTION =
   "Graphify: turn each repo into a queryable knowledge graph. Builds the graph " +
   "with graphify's deterministic tree-sitter pass (no LLM), exposes it to the " +
   "agent as three MCP tools — build, shortest path, explain — sets a session " +
-  "system prompt telling the agent the graph exists and when to prefer it over " +
-  "reading files, and ships a per-repo visualizer. Off until switched on: each " +
+  "system prompt telling the agent to query the graph before it reads or " +
+  "searches code, and ships a per-repo visualizer. Off until switched on: each " +
   "folder, and each repo inside it, is enabled from the Graphify page.";
-const VERSION = "0.4.2";
+const VERSION = "0.4.3";
 const REPOSITORY = "https://github.com/PeckBoard/graphify";
 
 // Inline SVG (lucide "waypoints") for the sidebar entry; rendered sandboxed.
