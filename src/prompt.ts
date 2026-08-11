@@ -32,19 +32,21 @@ export function promptMode(): PromptMode {
 
 /// Compose the system prompt block.
 ///
-/// Deliberately concrete and deliberately small: it names the three tools, says
-/// when each beats opening files, and says what the graph does NOT cover, so
-/// the agent doesn't ask it for prose it never ingested. Well under 2 KB —
-/// every token here is paid on every turn of every session in the folder.
+/// Deliberately concrete and deliberately small: it tells the agent to reach
+/// for the graph FIRST, names the three tools, says how to call each and when
+/// each beats opening files, and says what the graph does NOT cover, so the
+/// agent doesn't ask it for prose it never ingested. Well under 2 KB — every
+/// token here is paid on every turn of every session in the folder.
 export function composePrompt(stats: GraphStats | null, hasGraph: boolean): string {
   const lines: string[] = ["## Graphify knowledge graph", ""];
 
   if (!hasGraph) {
     lines.push(
-      "This folder has no graphify knowledge graph yet. Call `graphify_build` to create one:",
-      "it runs a deterministic tree-sitter pass over the source files (no LLM, no network) and",
-      "writes `graphify-out/graph.json`. After that, `graphify_explain` and `graphify_path`",
-      "answer structural questions far faster than reading files.",
+      "This folder has no graphify knowledge graph yet. Build one before you start reading code:",
+      "`graphify_build()` runs a deterministic tree-sitter pass over the source files (no LLM, no",
+      "network) and writes `graphify-out/graph.json`, usually in seconds. After that, start every",
+      "code task with `graphify_explain` / `graphify_path` — they answer structural questions far",
+      "faster than reading files.",
     );
   } else {
     const size = stats
@@ -53,12 +55,21 @@ export function composePrompt(stats: GraphStats | null, hasGraph: boolean): stri
     lines.push(
       `This folder has a graphify knowledge graph${size} at \`graphify-out/graph.json\`.`,
       "",
-      "Query it instead of grepping when the question is structural:",
-      "- `graphify_explain(label)` — what X is, where it is defined, every direct neighbour with",
-      "  the relation and confidence on each edge, and the cluster it belongs to. The fastest way",
-      "  to orient in unfamiliar code before opening a single file.",
-      "- `graphify_path(source, target)` — how A actually reaches B, hop by hop, with a diagram.",
-      "- `graphify_build()` — refresh after substantial code changes.",
+      "**Start here.** Before you read or search code, call `graphify_explain` on the most relevant",
+      "symbol, file, or feature name in the request. One call replaces several rounds of",
+      "search-and-read and tells you which files are worth opening. Fall back to search only when",
+      "the graph misses.",
+      "",
+      "- `graphify_explain(label)` — what X is, where it is defined, every direct neighbour with the",
+      "  relation and confidence on each edge, and the cluster it belongs to. If a label misses,",
+      "  retry with a shorter, differently-cased, or unqualified name.",
+      "- `graphify_path(source, target)` — how A actually reaches B, hop by hop, with a diagram. Use",
+      '  it for "does X call Y", tracing a flow, blast radius, and dead-code checks.',
+      "- `graphify_build()` — refresh after substantial code changes, and before trusting the graph",
+      "  on code you just wrote.",
+      "",
+      "Use it for: orienting in unfamiliar code, finding a definition or its callers, tracing a flow",
+      "across files, sizing the blast radius of a change, listing the files a task will touch.",
       "",
       "Read files when you need exact text, line numbers, comments, or anything an AST does not",
       "carry; the graph tells you where to look, not what the code says.",

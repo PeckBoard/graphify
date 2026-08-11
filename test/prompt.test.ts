@@ -14,6 +14,14 @@ describe("composePrompt", () => {
     }
   });
 
+  it("tells the agent to reach for the graph before reading or searching code", () => {
+    const block = composePrompt(STATS, true);
+    expect(block).toContain("**Start here.**");
+    expect(block).toContain("Before you read or search code");
+    // How to call it, not just that it exists.
+    expect(block).toContain("If a label misses");
+    expect(block).toContain("Use it for:");
+  });
   it("says what the graph is not, and where the multimodal pass lives", () => {
     const block = composePrompt(STATS, true);
     expect(block).toContain("code-only");
@@ -43,7 +51,8 @@ describe("composePrompt", () => {
     const block = composePrompt(null, false);
     expect(block).toContain("no graphify knowledge graph yet");
     expect(block).toContain("graphify_build");
-    expect(block).not.toContain("Query it instead of grepping");
+    expect(block).toContain("Build one before you start reading code");
+    expect(block).not.toContain("Start here");
   });
 });
 
