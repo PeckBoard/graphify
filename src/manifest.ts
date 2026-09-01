@@ -9,7 +9,11 @@ const DESCRIPTION =
   "system prompt telling the agent to query the graph before it reads or " +
   "searches code, and ships a per-repo visualizer. Off until switched on: each " +
   "folder, and each repo inside it, is enabled from the Graphify page.";
-const VERSION = "0.4.4";
+// Single source of truth for the version: package.json (bundled in by
+// esbuild/vitest via resolveJsonModule). Never hardcode a version here — a
+// manifest that self-reports an old version makes the registry's
+// "upgrade available" chip permanent (project-planner 0.3.0 shipped that way).
+import { version as VERSION } from "../package.json";
 const REPOSITORY = "https://github.com/PeckBoard/graphify";
 
 // Inline SVG (lucide "waypoints") for the sidebar entry; rendered sandboxed.
