@@ -1,10 +1,11 @@
 // Who is calling, and is graphify switched on for them.
 //
-// Graphify is off everywhere until someone turns it on: a folder carries an
-// enabled flag, and inside an enabled folder each repo carries its own. Both
-// default to OFF, so installing the plugin changes nothing until an operator
-// says where it may run.
-//
+// A folder carries an enabled flag, and inside an enabled folder each repo
+// carries its own. Both default to OFF, so installing the plugin runs nothing
+// on its own — but a session can switch them on: `graphify_build` flips both
+// switches for the caller's folder and repo before it builds (see
+// `switchOn`). The query tools still refuse until then, and their refusal
+// tells the agent to call `graphify_build`.
 // The state lives in the plugin document store, which core scopes by PLUGIN
 // only (`peckboard_store_put` → `store_put_impl(&db, &plugin_id, …)`) — there
 // is no per-folder partition. So the folder id has to be part of the key, and
@@ -82,7 +83,6 @@ export function repoEnabled(folderId: string | null, repo: string): boolean {
   if (folderId === null) return false;
   return storeGet(REPOS, repoKey(folderId, repo))?.enabled === true;
 }
-
 /// Flip one repo's switch, keeping whatever build record it already carries.
 export function setRepoEnabled(folderId: string, repo: string, enabled: boolean): void {
   const rel = resolveRepoPath(repo);
@@ -91,15 +91,30 @@ export function setRepoEnabled(folderId: string, repo: string, enabled: boolean)
   storePut(REPOS, key, { ...prev, repo: rel, enabled, enabled_at: Date.now() });
 }
 
+/// Switch graphify on for `repo` and its folder — what `graphify_build` does
+/// when a session asks for a graph somewhere nobody enabled yet. Returns
+/// whether anything actually changed.
+export function switchOn(folderId: string, repo: string): boolean {
+  let changed = false;
+  if (!folderEnabled(folderId)) {
+    setFolderEnabled(folderId, true);
+    changed = true;
+  }
+  if (!repoEnabled(folderId, repo)) {
+    setRepoEnabled(folderId, repo, true);
+    changed = true;
+  }
+  return changed;
+}
+
 // ── The gate ─────────────────────────────────────────────────────────────────
 
 /// Is this call allowed to touch `repo`? Returns null when it is, or the
 /// refusal to hand back when it isn't.
 ///
 /// The refusal is a normal tool result, not a throw: the agent reads it as an
-/// instruction, the same way it reads "run graphify_build first". It cannot act
-/// on that instruction itself — the switches live on the authed page, under the
-/// operator's authority — which is the entire point of having them.
+/// instruction, the same way it reads "run graphify_build first" — and a
+/// switched-off folder or repo is one `graphify_build` call away from on.
 export function gate(folderId: string | null, repo: string): Refusal | null {
   const rel = resolveRepoPath(repo);
   if (folderId === null) {
@@ -108,8 +123,7 @@ export function gate(folderId: string | null, repo: string): Refusal | null {
       repo: rel,
       error: "graphify could not tell which folder this call belongs to",
       next_step:
-        "run this from a session inside the folder you want graphed, then enable graphify " +
-        "for it on the Graphify page (Folders → the folder's Graphify button)",
+        "run this from a session inside the folder you want graphed, then call graphify_build",
     };
   }
   if (!folderEnabled(folderId)) {
@@ -118,8 +132,8 @@ export function gate(folderId: string | null, repo: string): Refusal | null {
       repo: rel,
       error: "graphify is switched off for this folder",
       next_step:
-        "open the Graphify page (Folders → the folder's Graphify button) and turn on " +
-        `'Graphify in this folder', then switch on the '${rel}' repo`,
+        `call graphify_build with repo='${rel}' — it switches graphify on for this folder and ` +
+        "builds the graph — then retry this query",
     };
   }
   if (!repoEnabled(folderId, rel)) {
@@ -128,8 +142,8 @@ export function gate(folderId: string | null, repo: string): Refusal | null {
       repo: rel,
       error: `graphify is switched off for the '${rel}' repo`,
       next_step:
-        "open the Graphify page (Folders → the folder's Graphify button) and switch on " +
-        `the '${rel}' repo`,
+        `call graphify_build with repo='${rel}' — it switches the repo on and builds its ` +
+        "graph — then retry this query",
     };
   }
   return null;

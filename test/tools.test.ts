@@ -100,21 +100,34 @@ describe("the folder and repo switches", () => {
   beforeEach(() => {
     hostCalls = [];
   });
-
-  it("refuses every tool when the folder was never switched on", () => {
+  it("refuses the query tools when the folder was never switched on", () => {
     for (const call of [
       () => graphifyPath({ source: "a", target: "b" }, CTX),
       () => graphifyExplain({ label: "a" }, CTX),
-      () => graphifyBuild({}, CTX),
     ]) {
       stubHost(FOUND);
       const result = call();
       expect(result.enabled).toBe(false);
       expect(result.error).toContain("switched off for this folder");
-      expect(result.next_step).toContain("Graphify page");
+      expect(result.next_step).toContain("call graphify_build");
       // Nothing ran: no probe, no install, no driver.
       expect(hostCalls.filter((c) => c.name === "peckboard_exec")).toEqual([]);
     }
+  });
+
+  it("graphify_build switches graphify on for the folder and repo, then builds", () => {
+    const docs = stubHost({ totals: { nodes: 3, edges: 2, communities: 1 } });
+    const result = graphifyBuild({ repo: "apps/api" }, CTX);
+    expect(result.switched_on).toBe(true);
+    expect(result.nodes).toBe(3);
+    expect((docs[`folders/${FOLDER}`] as any).enabled).toBe(true);
+    expect((docs[`repos/${FOLDER}|apps/api`] as any).enabled).toBe(true);
+    // The query tools now answer.
+    expect(graphifyPath({ source: "a", target: "b", repo: "apps/api" }, CTX).enabled).not.toBe(
+      false,
+    );
+    // A second build has nothing left to switch on.
+    expect(graphifyBuild({ repo: "apps/api" }, CTX).switched_on).toBeUndefined();
   });
 
   it("refuses a repo that is off inside a folder that is on", () => {
@@ -231,6 +244,11 @@ describe("the App Manager handoff when graphify is missing", () => {
       // the manual fallback.
       expect(result.next_step).toContain(APP_MANAGER_PAGE);
       expect(result.next_step).toContain(MANUAL_INSTALL_COMMAND);
+      // The agent route: ask the user, then the App Manager's own MCP tools.
+      expect(result.next_step).toContain("ask_user");
+      expect(result.next_step).toContain("app_install");
+      expect(result.next_step).toContain("app_status");
+      expect(result.app_manager.target).toBe("local");
       expect(result.app_manager.page).toBe(APP_MANAGER_LINK);
       // The link prefills the App Manager's request bar; it cannot install.
       expect(APP_MANAGER_LINK).toBe(

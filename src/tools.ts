@@ -4,9 +4,11 @@
 // and returns a plain object — `lib.ts` wraps a throw into `{error}` for the
 // agent, so a failure here reads as a tool result it can act on.
 //
-// The gate comes FIRST, before argument validation and before
-// `ensureGraphifyReady`: a folder nobody switched on must not so much as
-// trigger a probe. When graphify is missing, tools return the structured App
+// `graphify_build` is the way in: it switches graphify on for the caller's
+// folder and repo itself, so a session can graph a folder nobody enabled. The
+// query tools refuse until then, before argument validation and before
+// `ensureGraphifyReady` — their refusal tells the agent to call
+// `graphify_build`. When graphify is missing, tools return the structured App
 // Manager handoff (see `installHandoff` in driver.ts) instead of a bare
 // error — an actionable next_step, and never a silent self-install.
 
@@ -20,7 +22,7 @@ import {
   resolveRepoPath,
   runDriver,
 } from "./driver";
-import { REPOS, callerFolder, gate, repoKey } from "./scope";
+import { REPOS, callerFolder, gate, repoKey, switchOn } from "./scope";
 import { summarizeTotals } from "./graph";
 
 /// What a query tool says when there is no graph yet. The driver raises the
@@ -67,8 +69,9 @@ function recordRepo(folderId: string, repo: string, patch: Partial<RepoRecord>):
 export function graphifyBuild(args: any, context?: any): any {
   const repo = resolveRepoPath(args?.repo);
   const folderId = callerFolder(context);
-  const refusal = gate(folderId, repo);
-  if (refusal) return refusal;
+  // No folder means nowhere to switch on — the one case a build still refuses.
+  if (folderId === null) return gate(folderId, repo);
+  const switchedOn = switchOn(folderId, repo);
   // `update` defaults to true: reuse graphify's per-file SHA256 cache and
   // re-extract only what changed. `false` means drop the cache first.
   const update = args?.update === undefined || args?.update === null ? true : args.update === true;
@@ -80,7 +83,7 @@ export function graphifyBuild(args: any, context?: any): any {
     const summary = summarizeTotals(payload);
     const builtAt = typeof payload?.built_at === "number" ? payload.built_at : Date.now();
     const filesParsed = typeof payload?.files_parsed === "number" ? payload.files_parsed : 0;
-    recordRepo(folderId as string, repo, {
+    recordRepo(folderId, repo, {
       nodes: summary.nodes,
       edges: summary.edges,
       communities: summary.communities,
@@ -91,6 +94,7 @@ export function graphifyBuild(args: any, context?: any): any {
     });
     return {
       repo,
+      ...(switchedOn ? { switched_on: true } : {}),
       ...summary,
       files_parsed: filesParsed,
       full_rebuild: payload?.full_rebuild === true,
@@ -98,7 +102,7 @@ export function graphifyBuild(args: any, context?: any): any {
       report: joinRepo(repo, "graphify-out/GRAPH_REPORT.md"),
     };
   } catch (e) {
-    recordRepo(folderId as string, repo, { last_error: errMsg(e), last_error_at: Date.now() });
+    recordRepo(folderId, repo, { last_error: errMsg(e), last_error_at: Date.now() });
     throw e;
   }
 }

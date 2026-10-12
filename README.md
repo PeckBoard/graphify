@@ -44,26 +44,29 @@ Nothing runs until it is switched on, at two levels:
 
 | Switch | Where | Default |
 | --- | --- | --- |
-| **Graphify in this folder** | top bar of the Graphify page | off |
-| One repo inside that folder | the repo's card | off |
+| **Graphify in this folder** | top bar of the Graphify page, or `graphify_build` | off |
+| One repo inside that folder | the repo's card, or `graphify_build` | off |
 
-Installing the plugin therefore changes nothing on its own — including for a
-folder that was already using it before the switches existed, which goes quiet
-until someone turns it back on.
+Installing the plugin therefore runs nothing on its own. A session turns it on
+by calling `graphify_build`: the build flips both switches for the caller's
+folder and that repo first (the result carries `switched_on: true` when it
+did), then builds. Only a call with no resolvable folder still refuses.
 
 While a folder or repo is off:
 
-- all three MCP tools answer `{enabled: false, error, next_step}` naming the
-  switch to flip. `mcp_tools` is manifest-level, so a tool cannot be *hidden*
-  per folder — refusing is the honest equivalent, and the refusal is a normal
-  tool result the agent can act on;
+- `graphify_path` and `graphify_explain` answer `{enabled: false, error,
+  next_step}`, and the next step is "call `graphify_build`". `mcp_tools` is
+  manifest-level, so a tool cannot be *hidden* per folder — refusing is the
+  honest equivalent, and the refusal is a normal tool result the agent can act
+  on;
 - the session system prompt is not written (and an existing one is taken back
-  off) — advertising tools that will refuse is worse than saying nothing;
+  off) — core's shared provider prompt already tells every agent how to use the
+  tools and that `graphify_build` switches graphify on;
 - the page still **lists** repos, because that is how you choose one to enable,
-  but it will not build or draw them.
+  but it will not draw them until they are on.
 
-The switches are written only from the authed page, under the operator's
-authority. The agent reads them and stops; it cannot turn itself on.
+Turning a folder or repo off on the page stops the query tools until the next
+`graphify_build` from a session in that folder.
 
 Both live in the plugin document store, keyed by folder (`folders/<folder id>`)
 and by folder-and-repo (`repos/<folder id>|<repo path>`). The folder id is part
@@ -136,10 +139,12 @@ never misreports its size.
 
 ## Installing graphify
 
-**Installing is a handoff, not an integration.** Peckboard plugins are fully
-isolated from each other, so graphify cannot invoke the App Manager (or any
-other plugin) — it can only point a person at it, and nothing installs
-automatically.
+**graphify installs nothing itself.** Peckboard plugins are fully isolated from
+each other, so graphify cannot invoke the App Manager (or any other plugin).
+The agent can: the handoff tells it to ask the user with `ask_user`, then call
+the App Manager's own `app_install` tool for `python3`, `pip`, `graphifyy` on
+target `local`, follow `app_status`, and retry. A person can use the page link
+instead.
 
 When a tool runs and graphify's Python package is missing, the tool answers
 with a structured handoff instead of installing anything:
@@ -148,17 +153,21 @@ with a structured handoff instead of installing anything:
 {
   "installed": false,
   "error": "graphify is not installed for python3",
-  "next_step": "open the App Manager page (/plugin-page/app-manager/app-manager?install=python3,pip,graphifyy&from=graphify) and install 'python3', 'pip', 'graphifyy' — …",
+  "next_step": "ask the user (ask_user) to approve installing graphify through the Peckboard App Manager. On approval, call app_install for 'python3', 'pip', 'graphifyy', in that order, with target='local' … poll app_status … then retry this call. A person can do the same on the App Manager page (/plugin-page/app-manager/app-manager?install=python3,pip,graphifyy&from=graphify). …",
   "app_manager": {
     "page": "/plugin-page/app-manager/app-manager?install=python3,pip,graphifyy&from=graphify",
     "install": ["python3", "pip", "graphifyy"],
-    "note": "A handoff, not an integration: …"
+    "target": "local",
+    "note": "graphify cannot invoke the App Manager (plugins are isolated) and installs nothing itself — …"
   },
   "manual_command": "python3 -m venv .graphify-venv && .graphify-venv/bin/python -m pip install graphifyy"
 }
 ```
 
-- **App Manager path (recommended):** every "graphify isn't installed" banner
+- **Agent path (recommended):** the agent asks the user, then calls
+  `app_install` / `app_status` as above — the shared provider prompt in core
+  tells every provider's sessions to do exactly this.
+- **App Manager page:** every "graphify isn't installed" banner
   on the Graphify page — including the **install failed** and **timed out**
   ones — carries an **Install from App Manager** button. Clicking it asks the
   host to open the App Manager page with the request prefilled

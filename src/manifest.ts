@@ -8,7 +8,8 @@ const DESCRIPTION =
   "agent as three MCP tools — build, shortest path, explain — sets a session " +
   "system prompt telling the agent to query the graph before it reads or " +
   "searches code, and ships a per-repo visualizer. Off until switched on: each " +
-  "folder, and each repo inside it, is enabled from the Graphify page.";
+  "folder, and each repo inside it, is enabled from the Graphify page or by a " +
+  "session calling graphify_build there.";
 // Single source of truth for the version: package.json (bundled in by
 // esbuild/vitest via resolveJsonModule). Never hardcode a version here — a
 // manifest that self-reports an old version makes the registry's
@@ -28,8 +29,8 @@ const ICON =
 // (`.` = the folder itself), because core pins exec's cwd to the folder root.
 const REPO_ARG =
   "Repo to act on, as a path relative to the folder root ('.' for the folder " +
-  "itself). Defaults to '.'. Must stay inside the folder, and must be switched " +
-  "on for graphify on the Graphify page.";
+  "itself). Defaults to '.'. Must stay inside the folder. graphify_build switches " +
+  "graphify on for it; the query tools need it switched on.";
 
 export function manifestJson(): string {
   const manifest = {
@@ -170,7 +171,9 @@ export function manifestJson(): string {
           "NOT extract from docs, PDFs, or images — for a multimodal graph run the /graphify skill " +
           "instead. Returns node/edge/community counts, the highest-degree 'god nodes', and the " +
           "EXTRACTED/INFERRED/AMBIGUOUS confidence split. Run this once before querying, and again " +
-          "after substantial code changes.",
+          "after substantial code changes. If graphify is switched off for this folder or repo, " +
+          "this switches it on first. If graphify is not installed, the result says how to install " +
+          "it through the App Manager (ask the user, then app_install).",
         input_schema: {
           type: "object",
           properties: {

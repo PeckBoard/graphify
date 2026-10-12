@@ -31,8 +31,9 @@ export const MANUAL_INSTALL_COMMAND =
 
 /// Where the App Manager plugin's dashboard lives in the Peckboard UI (its
 /// sidebar item `app-manager`, served at /plugin-page/<plugin id>/<item id>).
-/// A path to point a PERSON at — plugins are fully isolated, so graphify can
-/// never call the App Manager or trigger an install through it.
+/// Plugins are isolated, so graphify itself can never call the App Manager —
+/// but the agent reading a handoff can, through the App Manager's own
+/// `app_install` / `app_status` MCP tools; a person can use this page.
 export const APP_MANAGER_PAGE = "/plugin-page/app-manager/app-manager";
 
 /// What to install there, in order: interpreter, installer, then the package
@@ -900,8 +901,10 @@ export function installGraphify(): InstallResult {
 }
 
 /// The structured "graphify is missing" answer a tool returns instead of a
-/// bare error: what is missing, where a person can install it, and the
-/// fallbacks. A HANDOFF, not an integration — see `app_manager.note`.
+/// bare error: what is missing, how the agent gets it installed (ask the user,
+/// then the App Manager's `app_install` tool), where a person can do it by
+/// hand, and the fallbacks. graphify itself installs nothing — see
+/// `app_manager.note`.
 export interface InstallHandoff {
   installed: false;
   error: string;
@@ -909,32 +912,36 @@ export interface InstallHandoff {
   app_manager: {
     page: string;
     install: string[];
+    target: string;
     note: string;
   };
   manual_command: string;
 }
 
 export function installHandoff(first: ProbeResult): InstallHandoff {
+  const apps = APP_MANAGER_INSTALL.map((n) => `'${n}'`).join(", ");
   return {
     installed: false,
     error: `graphify is not installed for ${first.python_bin}`,
     next_step:
-      `open the App Manager page (${APP_MANAGER_LINK}) and install ` +
-      `${APP_MANAGER_INSTALL.map((n) => `'${n}'`).join(", ")} — graphify cannot trigger that ` +
-      `install itself, a person has to run it there. Without the App Manager plugin, run by ` +
-      `hand: ${MANUAL_INSTALL_COMMAND}. Or enable this plugin's 'auto_install' setting ` +
-      `(off by default) to let graphify install into a private venv at the folder root.`,
+      `ask the user (ask_user) to approve installing graphify through the Peckboard App ` +
+      `Manager. On approval, call app_install for ${apps}, in that order, with target='local' ` +
+      `(pass your own thinking-capable model id as 'model'), poll app_status until each one ` +
+      `finishes, then retry this call. A person can do the same on the App Manager page ` +
+      `(${APP_MANAGER_LINK}). Without the App Manager plugin, run by hand: ` +
+      `${MANUAL_INSTALL_COMMAND}. Or enable this plugin's 'auto_install' setting (off by ` +
+      `default) to let graphify install into a private venv at the folder root.`,
     app_manager: {
       page: APP_MANAGER_LINK,
       install: [...APP_MANAGER_INSTALL],
+      target: "local",
       note:
-        "A handoff, not an integration: plugins are isolated, so graphify can only point at " +
-        "the App Manager — it cannot invoke it, and nothing installs automatically.",
+        "graphify cannot invoke the App Manager (plugins are isolated) and installs nothing " +
+        "itself — the agent asks the user, then calls the App Manager's app_install tool.",
     },
     manual_command: MANUAL_INSTALL_COMMAND,
   };
 }
-
 export type EnsureResult =
   | { ready: true; probe: ProbeResult }
   | { ready: false; handoff: InstallHandoff };

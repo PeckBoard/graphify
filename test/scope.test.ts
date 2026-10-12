@@ -87,12 +87,12 @@ describe("the switches", () => {
 });
 
 describe("the gate", () => {
-  it("refuses a folder nobody switched on, and names the page", () => {
+  it("refuses a folder nobody switched on, and points at graphify_build", () => {
     setHandlers(docStore().handlers);
     const refusal = gate(FOLDER, ".");
     expect(refusal?.enabled).toBe(false);
     expect(refusal?.error).toContain("switched off for this folder");
-    expect(refusal?.next_step).toContain("Graphify page");
+    expect(refusal?.next_step).toContain("call graphify_build");
   });
 
   it("refuses a repo that is off inside a folder that is on", () => {
